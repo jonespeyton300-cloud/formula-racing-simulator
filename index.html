@@ -146,9 +146,6 @@ scene.add(ground);
 // LARGE RACING CIRCUIT
 // ==========================================
 
-// Original circuit layout, expanded to three times
-// its previous dimensions.
-
 const TRACK_SCALE = 3;
 
 const controlPoints = [
@@ -612,6 +609,8 @@ steeringGroup.add(steeringWheel);
 box(steeringGroup,.35,.2,.12,0,0,0,wingMat);
 
 // Digital display
+// These variables are declared HERE and used by update().
+// Do not declare them a second time later in the script.
 const display=document.createElement('canvas');
 display.width=512;
 display.height=256;
@@ -808,7 +807,7 @@ function update(dt){
  const track=nearestTrack();
  const offTrack=track.distance>TRACK_WIDTH/2-1;
 
- const grip=offTrack?.55:1;
+ const grip=offTrack ? .55 : 1;
 
  // ------------------------------------------
  // ACCELERATION AND BRAKING
@@ -850,16 +849,12 @@ function update(dt){
   Math.abs(car.speed)/75,0,1
  );
 
- // Maximum front wheel angle:
- // 0.25 radians at low speed,
- // 0.025 radians at high speed.
  const maxSteer=THREE.MathUtils.lerp(
   .25,.025,speedRatio
  );
 
  const targetSteer=steering*maxSteer;
 
- // Slower steering response prevents sudden snapping.
  car.steer=THREE.MathUtils.damp(
   car.steer,
   targetSteer,
@@ -875,7 +870,6 @@ function update(dt){
   (car.speed/WHEELBASE)*
   Math.tan(car.steer)*grip;
 
- // Prevent extreme rotation at high speed.
  const maxYaw=THREE.MathUtils.lerp(
   1.0,.55,speedRatio
  );
@@ -923,7 +917,6 @@ function update(dt){
  carGroup.position.copy(car.position);
  carGroup.rotation.set(0,car.heading,0);
 
- // Independent wheel pivots
  const wheelSpin=car.speed*dt/.39;
 
  for(const wheel of wheels){
@@ -1024,6 +1017,7 @@ function update(dt){
   offTrack?'OFF TRACK · REDUCED GRIP':
   'PRACTICE SESSION · DRY TRACK';
 
+ // Update cockpit display
  ctx.clearRect(0,0,512,256);
  ctx.fillStyle='#102a35';
  ctx.fillRect(0,0,512,256);
@@ -1042,16 +1036,6 @@ function update(dt){
 
  displayTexture.needsUpdate=true;
 }
-
-// ==========================================
-// COCKPIT DISPLAY TEXTURE
-// ==========================================
-
-const display=document.createElement('canvas');
-display.width=512;
-display.height=256;
-const ctx=display.getContext('2d');
-const displayTexture=new THREE.CanvasTexture(display);
 
 // ==========================================
 // START GAME
