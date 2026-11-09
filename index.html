@@ -1,1 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX Formula Racing</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#080d13;color:white;font-family:Arial}
+canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none}
+.panel{background:#07101bdc;border:1px solid #ffffff35;border-radius:9px;padding:13px}
+#top{position:absolute;top:15px;left:15px;right:15px;display:flex;justify-content:space-between}
+#brand{font-weight:bold;letter-spacing:3px}
+#brand span{color:#ff304d}
+#race{text-align:right}
+#lap{font-size:22px;font-weight:bold}
+#status{position:absolute;top:85px;left:18px;font-size:11px;letter-spacing:2px}
+#dashboard{position:absolute;right:20px;bottom:20px;width:230px}
+#speed{font-size:55px;font-weight:bold}
+#gear{float:right;font-size:34px;color:#ff304d}
+#rpmbar{height:7px;background:#263442;margin:12px 0}
+#rpmfill{height:100%;width:0;background:linear-gradient(90deg,lime,yellow,red)}
+#help{position:absolute;bottom:20px;left:20px;font-size:12px;line-height:2}
+#message{position:absolute;top:30%;width:100%;text-align:center}
+#message h1{font-size:48px;letter-spacing:4px}
+button{pointer-events:auto;background:#ed2947;color:white;border:0;padding:14px 28px;font-weight:bold;cursor:pointer;border-radius:5px}
+.small{font-size:11px;color:#b7c4d0;letter-spacing:2px}
+</style>
+</head>
+<body>
+<div id="hud">
+ <div id="top">
+  <div id="brand" class="panel">APEX <span>FORMULA</span></div>
+  <div id="race" class="panel">
+   <div class="small">RACE SESSION</div>
+   <div id="lap">LAP 1 / 3</div>
+   <div id="timer">00:00.000</div>
+  </div>
+ </div>
 
+ <div id="status">PRACTICE SESSION · DRY TRACK</div>
+
+ <div id="help" class="panel">
+  W / ↑ : Accelerate<br>
+  S / ↓ : Brake<br>
+  A / D : Steering<br>
+  SPACE : Handbrake<br>
+  F : Change camera<br>
+  R : Reset car<br>
+  ESC : Pause
+ </div>
+
+ <div id="dashboard" class="panel">
+  <div class="small">SPEED <span id="gear">N</span></div>
+  <div><span id="speed">0</span> <span class="small">MPH</span></div>
+  <div id="rpmbar"><div id="rpmfill"></div></div>
+  <div class="small"><span id="rpm">900 RPM</span> <span id="throttle">THR 0%</span></div>
+ </div>
+
+ <div id="message">
+  <h1>LIGHTS OUT.</h1>
+  <p>Welcome to Apex Formula Racing.</p>
+  <button id="start">START ENGINE</button>
+ </div>
+</div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x8bb7d6);
+scene.fog=new THREE.Fog(0x8bb7d6,150,520);
+
+const camera=new THREE.PerspectiveCamera(
+76,innerWidth/innerHeight,0.1,1200
+);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xd9edff,0x42513b,2));
+
+const sun=new THREE.DirectionalLight(0xffffff,2.2);
+sun.position.set(-70,120,-40);
+sun.castShadow=true;
+scene.add(sun);
+
+const material=(color)=>new THREE.MeshStandardMaterial({color});
+const grass=material(0x477b42);
+const asphalt=material(0x292d32);
+const white=material(0xf4f4ef);
+const red=material(0xe3263f);
+const carbon=material(0x111820);
+
+const ground=new THREE.Mesh(
+new THREE.PlaneGeometry(1400,1400),grass);
+ground.rotation.x=-Math.PI/2;
+ground.position.y=-.18;
+scene.add(ground);
+
+const controls=[
+[0,0,0],[0,0,-95],[35,0,-145],
+[105,0,-145],[155,0,-105],[155,0,-30],
+[120,0,25],[65,0,55],[45,0,115],
+[0,0,145],[-80,0,130],[-145,0,85],
+[-155,0,10],[-120,0,-55],[-55,0,-65]
+].map(p=>new THREE.Vector3(...p));
+
+const curve=new THREE.CatmullRomCurve3(controls,true);
+const samples=900;
+const width=17;
+const points=curve.getPoints(samples);
+
+function strip(offset,w,y,mat){
+const vertices=[],indices=[];
+for(let i=0;i<=samples;i++){
+const p=points[i];
+const t=curve.getTangent(i/samples);
+const side=new THREE.Vector3(-t.z,0,t.x).normalize();
+const c=p.clone().addScaledVector(side,offset);
+for(const s of [-1,1]){
+const v=c.clone().addScaledVector(side,s*w/2);
+vertices.push(v.x,y,v.z);
+}
+if(i<samples){
+const a=i*2;
+indices.push(a,a+1,a+2,a+1,a+3,a+2);
+}
+}
+const g=new THREE.BufferGeometry();
+g.setAttribute('position',
+new THREE.Float32BufferAttribute(vertices,3));
+g.setIndex(indices);
+g.computeVertexNormals();
+scene.add(new THREE.Mesh(g,mat));
+}
+
+strip(0,width,.015,asphalt);
+strip(-width/2+.35,.22,.04,white);
+strip(width/2-.35,.22,.04,white);
+strip(-width/2+.95,.75,.035,red);
+strip(width/2-.95,.75,.035,white);
+
+// Barriers
+for(let i=0;i<samples;i+=5){
+const p=points[i];
+const t=curve.getTangent(i/samples);
+const side=new THREE.Vector3(-t.z,0,t.x).normalize();
+for(const s of [-1,1]){
+const b=new THREE.Mesh(
+new THREE.BoxGeometry(2.5,1.1,1.2),
+Math.floor(i/5)%2?white:red);
+b.position.copy(p).addScaledVector(side,s*(width/2+2));
+b.position.y=.55;
+b.rotation.y=Math.atan2(t.x,t.z);
+scene.add(b);
+}
+}
+
+// Trackside scenery
+for(let i=0;i<90;i++){
+const p=curve.getPoint(i/90);
+const t=curve.getTangent(i/90);
+const side=new THREE.Vector3(-t.z,0,t.x).normalize();
+const pos=p.clone().addScaledVector(
+side,(i%2?1:-1)*(width/2+23));
+
+const trunk=new THREE.Mesh(
+new THREE.CylinderGeometry(.35,.5,3,7),
+material(0x60452d));
+trunk.position.set(pos.x,1.5,pos.z);
+scene.add(trunk);
+
+const tree=new THREE.Mesh(
+new THREE.ConeGeometry(3.2,8,8),
+material(0x245c35));
+tree.position.set(pos.x,6,pos.z);
+scene.add(tree);
+}
+
+// Vehicle state
+const car={
+pos:new THREE.Vector3(0,0,0),
+heading:0,
+speed:0,
+steer:0,
+gear:1,
+rpm:900,
+lap:1
+};
+
+const keys={};
+let started=false;
+let paused=false;
+let cockpit=true;
+
+addEventListener('keydown',e=>{
+keys[e.code]=true;
+if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+if(e.code==='KeyR')resetCar();
+if(e.code==='KeyF')cockpit=!cockpit;
+if(e.code==='Escape'&&started){
+paused=!paused;
+document.getElementById('message').style.display=paused?'block':'none';
+document.querySelector('#message h1').textContent=paused?'PAUSED':'LIGHTS OUT.';
+}
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+
+function resetCar(){
+car.pos.set(0,0,0);
+car.heading=0;
+car.speed=0;
+car.steer=0;
+}
+
+// Cockpit
+const cockpitGroup=new THREE.Group();
+camera.add(cockpitGroup);
+scene.add(camera);
+
+function box(parent,w,h,d,x,y,z,mat){
+const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+m.position.set(x,y,z);
+parent.add(m);
+return m;
+}
+
+box(cockpitGroup,2,.22,.7,0,-.92,-1.15,carbon);
+box(cockpitGroup,2,.13,.12,0,-.78,-1.55,red);
+box(cockpitGroup,.12,.65,.12,-.96,-.48,-1.25,carbon);
+box(cockpitGroup,.12,.65,.12,.96,-.48,-1.25,carbon);
+
+// Halo
+function rod(parent,a,b,r,mat){
+const A=new THREE.Vector3(...a);
+const B=new THREE.Vector3(...b);
+const d=B.clone().sub(A);
+const m=new THREE.Mesh(
+new THREE.CylinderGeometry(r,r,d.length(),12),mat);
+m.position.copy(A.add(B).multiplyScalar(.5));
+m.quaternion.setFromUnitVectors(
+new THREE.Vector3(0,1,0),d.normalize());
+parent.add(m);
+}
+
+rod(cockpitGroup,[-.9,.2,-2.3],[-.12,.55,-2.3],.055,carbon);
+rod(cockpitGroup,[.9,.2,-2.3],[.12,.55,-2.3],.055,carbon);
+rod(cockpitGroup,[0,.55,-2.3],[0,.9,-2.3],.06,carbon);
+rod(cockpitGroup,[-.12,.9,-2.3],[.12,.9,-2.3],.06,carbon);
+
+// Steering wheel
+const wheelPivot=new THREE.Group();
+wheelPivot.position.set(0,-.48,-1.15);
+cockpitGroup.add(wheelPivot);
+
+const wheel=new THREE.Mesh(
+new THREE.TorusGeometry(.38,.055,10,40),carbon);
+wheel.position.z=-.25;
+wheelPivot.add(wheel);
+box(wheelPivot,.36,.25,.12,0,0,-.25,carbon);
+
+// Dashboard screen
+const display=document.createElement('canvas');
+display.width=512;
+display.height=256;
+const ctx=display.getContext('2d');
+const texture=new THREE.CanvasTexture(display);
+const screen=new THREE.Mesh(
+new THREE.PlaneGeometry(.5,.22),
+new THREE.MeshBasicMaterial({map:texture}));
+screen.position.set(0,-.08,-1.49);
+cockpitGroup.add(screen);
+
+// Mirrors
+box(cockpitGroup,.36,.12,.16,-.83,.32,-1.75,carbon);
+box(cockpitGroup,.36,.12,.16,.83,.32,-1.75,carbon);
+
+const clock=new THREE.Clock();
+let lapStart=performance.now();
+let lastAngle=0;
+
+function nearestTrack(pos){
+let best=Infinity;
+for(let i=0;i<samples;i+=3){
+best=Math.min(best,pos.distanceTo(points[i]));
+}
+return best;
+}
+
+function formatTime(ms){
+const s=ms/1000;
+const m=Math.floor(s/60);
+return String(m).padStart(2,'0')+':'+
+(s%60).toFixed(3).padStart(6,'0');
+}
+
+function update(dt){
+if(!started||paused)return;
+
+const throttle=(keys.KeyW||keys.ArrowUp)?1:0;
+const brake=(keys.KeyS||keys.ArrowDown)?1:0;
+const handbrake=keys.Space?1:0;
+
+const steerInput=
+(keys.KeyA||keys.ArrowLeft?-1:0)+
+(keys.KeyD||keys.ArrowRight?1:0);
+
+const distance=nearestTrack(car.pos);
+const offTrack=distance>width/2-1;
+const grip=offTrack?.38:1;
+
+const maxSpeed=92;
+const accel=throttle*13.5;
+const braking=brake*27+handbrake*14;
+
+car.speed+=accel*dt;
+car.speed-=Math.sign(car.speed)*braking*dt;
+car.speed*=Math.pow(offTrack?.988:.997,dt*60);
+car.speed=THREE.MathUtils.clamp(car.speed,0,maxSpeed);
+
+car.steer=THREE.MathUtils.damp(
+car.steer,steerInput*.48,5.5,dt);
+
+car.heading+=car.steer*(car.speed/7.5)*grip*dt;
+
+const forward=new THREE.Vector3(
+Math.sin(car.heading),0,-Math.cos(car.heading));
+
+car.pos.addScaledVector(forward,car.speed*dt);
+
+if(offTrack)car.speed=Math.max(0,car.speed-2.2*dt);
+
+// Automatic gearbox
+const idealRpm=900+car.speed/maxSpeed*6800;
+car.rpm=THREE.MathUtils.damp(car.rpm,idealRpm,7,dt);
+
+if(car.rpm>7100&&car.gear<8){
+car.gear++;
+car.rpm=4800;
+}
+if(car.rpm<2300&&car.gear>1&&car.speed<car.gear*12){
+car.gear--;
+car.rpm=5200;
+}
+
+// Camera
+const target=car.pos.clone().add(new THREE.Vector3(0,1.6,0));
+
+if(cockpit){
+camera.position.copy(target);
+camera.position.y+=.48;
+camera.rotation.order='YXZ';
+camera.rotation.y=car.heading;
+camera.rotation.x=0;
+camera.rotation.z=-car.steer*.10*(car.speed/30);
+cockpitGroup.visible=true;
+}else{
+const back=new THREE.Vector3(
+Math.sin(car.heading),0,-Math.cos(car.heading));
+camera.position.copy(target).addScaledVector(back,-9);
+camera.position.y+=4;
+camera.lookAt(target);
+cockpitGroup.visible=false;
+}
+
+wheelPivot.rotation.z=-car.steer*1.45;
+
+// HUD
+const mph=Math.round(car.speed*2.23694);
+document.getElementById('speed').textContent=mph;
+document.getElementById('gear').textContent=car.gear;
+document.getElementById('rpm').textContent=Math.round(car.rpm)+' RPM';
+document.getElementById('rpmfill').style.width=
+Math.min(100,car.rpm/8000*100)+'%';
+document.getElementById('throttle').textContent=
+'THR '+Math.round(throttle*100)+'%';
+document.getElementById('timer').textContent=
+formatTime(performance.now()-lapStart);
+
+ctx.clearRect(0,0,512,256);
+ctx.fillStyle='#102a35';
+ctx.fillRect(0,0,512,256);
+ctx.fillStyle='white';
+ctx.font='bold 105px Arial';
+ctx.fillText(String(mph),25,135);
+ctx.fillStyle='#ff425b';
+ctx.font='bold 42px Arial';
+ctx.fillText('GEAR '+car.gear,28,205);
+ctx.fillStyle='#7de3d1';
+ctx.font='28px Arial';
+ctx.fillText(Math.round(car.rpm)+' RPM',300,205);
+texture.needsUpdate=true;
+
+document.getElementById('status').textContent=
+offTrack?'OFF TRACK · REDUCED GRIP':'PRACTICE SESSION · DRY TRACK';
+}
+
+document.getElementById('start').onclick=()=>{
+started=true;
+paused=false;
+lapStart=performance.now();
+document.getElementById('message').style.display='none';
+};
+
+function animate(){
+requestAnimationFrame(animate);
+const dt=Math.min(clock.getDelta(),.04);
+update(dt);
+renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+camera.aspect=innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
